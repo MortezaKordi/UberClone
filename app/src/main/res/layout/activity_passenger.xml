@@ -28,6 +28,12 @@
 
 
     <Button
+        android:id="@+id/btnBeepBeep"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Beep Beep!" />
+
+    <Button
         android:id="@+id/btnLogoutFromPassengerActivity"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

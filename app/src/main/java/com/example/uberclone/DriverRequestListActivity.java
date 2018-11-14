@@ -33,6 +33,7 @@ import com.parse.ParseGeoPoint;
 import com.parse.ParseObject;
 import com.parse.ParseQuery;
 import com.parse.ParseUser;
+import com.parse.SaveCallback;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,6 +49,7 @@ public class DriverRequestListActivity extends AppCompatActivity implements View
     private ArrayAdapter adapter;
     private ArrayList<Double> passengersLatitudes;
     private ArrayList<Double> passengersLongitudes;
+    private ArrayList<String> requestcarUsernames;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,6 +64,7 @@ public class DriverRequestListActivity extends AppCompatActivity implements View
         nearByDriveRequests = new ArrayList<>();
         passengersLatitudes = new ArrayList<>();
         passengersLongitudes = new ArrayList<>();
+        requestcarUsernames = new ArrayList<>();
         adapter = new ArrayAdapter(this, android.R.layout.simple_list_item_1, nearByDriveRequests);
 
         listView.setAdapter(adapter);
@@ -74,31 +77,7 @@ public class DriverRequestListActivity extends AppCompatActivity implements View
 
         if (Build.VERSION.SDK_INT < 23 || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
 
-           locationListener = new LocationListener() {
-               @Override
-               public void onLocationChanged(Location location) {
-
-                   locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
-               }
-
-               @Override
-               public void onStatusChanged(String provider, int status, Bundle extras) {
-
-               }
-
-               @Override
-               public void onProviderEnabled(String provider) {
-
-               }
-
-               @Override
-               public void onProviderDisabled(String provider) {
-
-               }
-           };
-
-
-
+            initializeLocationListener();
 
         }
 
@@ -176,12 +155,14 @@ public class DriverRequestListActivity extends AppCompatActivity implements View
 
         if (driverLocation != null) {
 
+            saveDriverLocationToParse(driverLocation);
 
 
             final ParseGeoPoint driverCurrentLocation = new ParseGeoPoint(driverLocation.getLatitude(), driverLocation.getLongitude());
 
                 ParseQuery<ParseObject> requestCarQuery = ParseQuery.getQuery("RequestCar");
                 requestCarQuery.whereNear("passengerLocation", driverCurrentLocation);
+                requestCarQuery.whereDoesNotExist("driverOfMe");
                 requestCarQuery.findInBackground(new FindCallback<ParseObject>() {
                     @Override
                     public void done(List<ParseObject> objects, ParseException e) {
@@ -198,6 +179,9 @@ public class DriverRequestListActivity extends AppCompatActivity implements View
                                 if (passengersLongitudes.size() > 0) {
                                     passengersLongitudes.clear();
                                 }
+                                if (requestcarUsernames.size() > 0) {
+                                    requestcarUsernames.clear();
+                                }
 
                                 for (ParseObject nearRequest : objects) {
 
@@ -208,13 +192,14 @@ public class DriverRequestListActivity extends AppCompatActivity implements View
                                     // 5.87594834787398943 * 10
 
                                     //  58.246789 // Result
-                                    //  57/10 = 5.7
+                                    // 58
                                     float roundedDistanceValue = Math.round(milesDistanceToPassenger * 10) / 10;
 
                                     nearByDriveRequests.add("There are " + roundedDistanceValue + " miles to " + nearRequest.get("username"));
 
                                     passengersLatitudes.add(pLocation.getLatitude());
                                     passengersLongitudes.add(pLocation.getLongitude());
+                                    requestcarUsernames.add(nearRequest.get("username") + "");
 
                                 }
 
@@ -242,6 +227,8 @@ public class DriverRequestListActivity extends AppCompatActivity implements View
         if (requestCode == 1000 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED){
 
             if (ContextCompat.checkSelfPermission(DriverRequestListActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+
+               initializeLocationListener();
                 locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
 
                 Location currentDriverLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
@@ -257,7 +244,70 @@ public class DriverRequestListActivity extends AppCompatActivity implements View
     public void onItemClick(AdapterView<?> parent, View view,
                             int position, long id) {
 
-        Toast.makeText(this, "Clicked", Toast.LENGTH_LONG).show();
+      //  Toast.makeText(this, "Clicked", Toast.LENGTH_LONG).show();
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+
+            Location cdLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+
+            if (cdLocation != null) {
+                Intent intent = new Intent(this, ViewLocationsMapActivity.class);
+                intent.putExtra("dLatitude", cdLocation.getLatitude());
+                intent.putExtra("dLongitude", cdLocation.getLongitude());
+                intent.putExtra("pLatitude", passengersLatitudes.get(position));
+                intent.putExtra("pLongitude", passengersLongitudes.get(position));
+
+                intent.putExtra("rUsername", requestcarUsernames.get(position));
+                startActivity(intent);
+            }
+
+        }
+    }
+
+    private void initializeLocationListener() {
+
+        locationListener = new LocationListener() {
+            @Override
+            public void onLocationChanged(Location location) {
+
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+
+
+            }
+
+            @Override
+            public void onStatusChanged(String provider, int status, Bundle extras) {
+
+            }
+
+            @Override
+            public void onProviderEnabled(String provider) {
+
+            }
+
+            @Override
+            public void onProviderDisabled(String provider) {
+
+            }
+        };
+
 
     }
+
+    private void saveDriverLocationToParse(Location location) {
+
+        ParseUser driver = ParseUser.getCurrentUser();
+        ParseGeoPoint driverLocation = new ParseGeoPoint(location.getLatitude(), location.getLongitude());
+        driver.put("driverLocation", driverLocation);
+        driver.saveInBackground(new SaveCallback() {
+            @Override
+            public void done(ParseException e) {
+                if (e == null) {
+                    Toast.makeText(DriverRequestListActivity.this, "Location Saved", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+    }
+
 }
